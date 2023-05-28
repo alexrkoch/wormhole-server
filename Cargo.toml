@@ -1,0 +1,22 @@
+[features]
+default = ["stream-logging", "file-logging"]
+stream-logging = []
+file-logging = []
+
+[package]
+name = "wormhole"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-web = "4.3.1"
+anyhow = "1.0.71"
+cfg-if = "1.0.0"
+serde = { version = "1.0.163", features = ["derive"] }
+tokio = { version = "1.28.2", features = ["full"] }
+tracing = "0.1.37"
+tracing-appender = "0.2.2"
+tracing-core = "0.1.31"
+tracing-subscriber = "0.3.17"
