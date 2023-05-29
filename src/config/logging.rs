@@ -2,10 +2,11 @@
 
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_core::Level;
-use tracing_subscriber::filter::Targets;
+use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{fmt, Registry};
 
+const LOG_LEVEL_ENV_VAR: &str = "WORMHOLE_LOG_LEVEL";
 const LOG_FILE_PREFIX: &str = "log";
 const LOG_FILE_DIRECTORY: &str = "./log";
 
@@ -27,14 +28,18 @@ pub fn configure_tracing() -> anyhow::Result<Option<WorkerGuard>> {
         let s = subscriber.with(fmt::layer().with_writer(file_writer));
         s
     };
-
-    let targets_filter = Targets::default().with_default(if cfg!(debug_assertions) {
-        Level::DEBUG
+    let default_level_filter = if cfg!(debug_assertions) {
+        LevelFilter::DEBUG
     } else {
-        Level::INFO
-    });
+        LevelFilter::INFO
+    };
 
-    let subscriber = subscriber.with(targets_filter);
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(default_level_filter.into())
+        .with_env_var(LOG_LEVEL_ENV_VAR)
+        .from_env_lossy();
+
+    let subscriber = subscriber.with(env_filter);
 
     tracing::subscriber::set_global_default(subscriber)?;
 
