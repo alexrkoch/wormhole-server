@@ -1,10 +1,11 @@
 mod config;
 use actix_web::{get, App, HttpServer, Responder};
 use anyhow::Result as AnyhowResult;
+use tracing_actix_web::TracingLogger;
 
 #[get("/")]
-#[tracing::instrument]
 async fn root() -> impl Responder {
+    tracing::info!("Root");
     "I am root"
 }
 
@@ -12,7 +13,7 @@ async fn root() -> impl Responder {
 async fn main() -> AnyhowResult<()> {
     let _guard = config::logging::configure_tracing()?;
 
-    HttpServer::new(|| App::new().service(root))
+    HttpServer::new(|| App::new().wrap(TracingLogger::default()).service(root))
         .bind((config::server::get_host(), config::server::get_port()))?
         .run()
         .await?;
