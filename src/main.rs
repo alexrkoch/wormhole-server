@@ -5,7 +5,6 @@ use tracing_actix_web::TracingLogger;
 
 #[get("/")]
 async fn root() -> impl Responder {
-    tracing::info!("Root");
     "I am root"
 }
 
