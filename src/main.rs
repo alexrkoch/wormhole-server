@@ -14,7 +14,10 @@ async fn main() -> AnyhowResult<()> {
     let _guard = config::logging::configure_tracing()?;
 
     HttpServer::new(|| App::new().wrap(TracingLogger::default()).service(root))
-        .bind((config::server::get_host(), config::server::get_port()))?
+        .bind((
+            config::server::get_host().as_ref(),
+            config::server::get_port(),
+        ))?
         .run()
         .await?;
 
