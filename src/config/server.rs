@@ -23,7 +23,7 @@ pub fn get_port() -> u16 {
     match var(PORT_ENV_VAR) {
         Ok(port) => {
             info!("Using {} as the port since {} is set", port, PORT_ENV_VAR);
-            port.parse().expect(format!("The environment variable {PORT_ENV_VAR} contains an invalid port, please fix or delete it").as_str())
+            port.parse().unwrap_or_else(|_| panic!("The environment variable {PORT_ENV_VAR} contains an invalid port, please fix or delete it"))
         }
         _ => {
             info!("Using {} as the port", DEFAULT_PORT);
