@@ -1,8 +1,3 @@
-[features]
-default = ["stream-logging", "file-logging"]
-stream-logging = []
-file-logging = []
-
 [package]
 name = "wormhole"
 version = "0.1.0"
