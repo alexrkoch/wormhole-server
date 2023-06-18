@@ -16,8 +16,7 @@ where
     S: tracing::Subscriber + for<'a> LookupSpan<'a>,
 {
     fmt::layer()
-        .event_format(tracing_subscriber::fmt::format().compact())
-        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+        .event_format(tracing_subscriber::fmt::format().pretty())
 }
 
 fn get_file_layer<S>() -> (impl Layer<S>, WorkerGuard)
@@ -29,7 +28,8 @@ where
 
     let layer = fmt::layer()
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-        .with_writer(file_writer);
+        .with_writer(file_writer)
+        .json();
 
     (layer, worker_guard)
 }
