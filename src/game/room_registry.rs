@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+
 use thiserror::Error;
+use tokio::sync::mpsc::Sender;
 use tracing::{info, instrument, warn};
 use uuid::Uuid;
 
@@ -63,8 +65,11 @@ impl<T: ProvideRoomId> RoomRegistry<T> {
         return self.rooms.get(&id.into());
     }
 
-    #[instrument(skip(self))]
-    pub fn create_room(&mut self) -> Result<RoomId, RoomCreationError> {
+    #[instrument(skip_all)]
+    pub fn create_room(
+        &mut self,
+        deletion_sender: Sender<RoomId>,
+    ) -> Result<RoomId, RoomCreationError> {
         info!(event = "start");
         let mut id = T::provide_id();
         let mut attempts = 0;
@@ -82,10 +87,20 @@ impl<T: ProvideRoomId> RoomRegistry<T> {
             id = T::provide_id();
         }
 
-        let room = Room::new();
+        let room = Room::new(id, deletion_sender);
         self.rooms.insert(id, room);
-        info!(event = "room_created_successfully", id = format!("{}", id));
+        info!(event = "room_created_successfully", id = %id);
         Ok(id)
+    }
+
+    pub fn list_active_rooms(&self) -> Vec<String> {
+        self.rooms.keys().map(|rm| format!("{}", rm)).collect()
+    }
+
+    #[instrument(skip_all)]
+    pub fn delete_room(&mut self, id: &RoomId) {
+        info!(event = "deleting_room", room_id = %id);
+        self.rooms.remove(id);
     }
 }
 
@@ -93,24 +108,26 @@ impl<T: ProvideRoomId> RoomRegistry<T> {
 mod get_room_for_id {
     use super::*;
 
-    #[test]
-    fn returns_room_if_one_exists() {
+    #[tokio::test]
+    async fn returns_room_if_one_exists() {
         let room_id = 1234_u128;
-        let rooms = HashMap::from([(room_id.into(), Room::new())]);
+        let (sender, _) = tokio::sync::mpsc::channel(1);
+        let rooms = HashMap::from([(room_id.into(), Room::new(RoomId(room_id), sender.clone()))]);
 
         let registry: RoomRegistry<Uuid> = RoomRegistry {
             rooms,
             _provider: std::marker::PhantomData,
         };
         let room = registry.get_room_for_id(room_id);
-        assert_eq!(room, Some(&Room::new()));
+        assert_eq!(room, Some(&Room::new(RoomId(room_id), sender)));
     }
 
-    #[test]
-    fn returns_none_if_no_rooms_exist() {
+    #[tokio::test]
+    async fn returns_none_if_no_rooms_exist() {
         let room_id = 1234_u128;
         let bad_room_id = 0_u128;
-        let rooms = HashMap::from([(room_id.into(), Room::new())]);
+        let (sender, _) = tokio::sync::mpsc::channel(1);
+        let rooms = HashMap::from([(room_id.into(), Room::new(RoomId(room_id), sender))]);
 
         let registry: RoomRegistry<Uuid> = RoomRegistry {
             rooms,
@@ -125,16 +142,17 @@ mod get_room_for_id {
 mod create_room {
     use super::*;
 
-    #[test]
-    fn adds_room_to_registry_on_creation() {
+    #[tokio::test]
+    async fn adds_room_to_registry_on_creation() {
         let mut registry = RoomRegistry::new();
-        let id = registry.create_room().unwrap();
+        let (sender, _) = tokio::sync::mpsc::channel(1);
+        let id = registry.create_room(sender).unwrap();
         let room = registry.get_room_for_id(id);
         assert_ne!(room, Option::None);
     }
 
-    #[test]
-    fn fails_if_new_room_cant_be_created_after_max_attempts() {
+    #[tokio::test]
+    async fn fails_if_new_room_cant_be_created_after_max_attempts() {
         struct BadIdProvider;
         impl ProvideRoomId for BadIdProvider {
             fn provide_id() -> RoomId {
@@ -146,11 +164,13 @@ mod create_room {
             rooms: Default::default(),
             _provider: std::marker::PhantomData,
         };
+        let (sender, _) = tokio::sync::mpsc::channel(1);
         // Bad room id provider only returns 0 so after the first room is created
         // we should be unable to create another one
-        let _ = registry.create_room();
+        let _ = registry.create_room(sender);
 
-        let res = registry.create_room();
+        let (sender, _) = tokio::sync::mpsc::channel(1);
+        let res = registry.create_room(sender);
         assert_eq!(
             res,
             Err(RoomCreationError::UnableToCreateIdentifier(

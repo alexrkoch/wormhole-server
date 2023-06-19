@@ -15,8 +15,7 @@ fn get_stdout_layer<S>() -> impl Layer<S>
 where
     S: tracing::Subscriber + for<'a> LookupSpan<'a>,
 {
-    fmt::layer()
-        .event_format(tracing_subscriber::fmt::format().pretty())
+    fmt::layer().event_format(tracing_subscriber::fmt::format().pretty())
 }
 
 fn get_file_layer<S>() -> (impl Layer<S>, WorkerGuard)
