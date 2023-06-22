@@ -1,11 +1,20 @@
+//! Values and utility functions for configuring the server
+
 use std::{borrow::Cow, env::var};
 use tracing::info;
 
+/// The name of the environment variable that can be used to override the host
 const HOST_ENV_VAR: &str = "WORMHOLE_HOST";
+/// The name of the environment variable that can be used to override the port
 const PORT_ENV_VAR: &str = "WORMHOLE_PORT";
+/// The default host that the server is configured to use
 const DEFAULT_HOST: &str = "127.0.0.1";
+/// The default port that the server is configured to use
 const DEFAULT_PORT: u16 = 8080;
 
+/// Gets the server host name.
+/// Reads from the [environment][HOST_ENV_VAR] if available, otherwise falls back to the [default
+/// value][DEFAULT_HOST]
 pub fn get_host() -> Cow<'static, str> {
     match var(HOST_ENV_VAR) {
         Ok(host) => {
@@ -19,6 +28,9 @@ pub fn get_host() -> Cow<'static, str> {
     }
 }
 
+/// Gets the server port.
+/// Reads from the [environment][PORT_ENV_VAR] if available, otherwise falls back to the [default
+/// value][DEFAULT_PORT]
 pub fn get_port() -> u16 {
     match var(PORT_ENV_VAR) {
         Ok(port) => {

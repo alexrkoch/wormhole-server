@@ -7,18 +7,22 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::{fmt, Layer, Registry};
 
+/// The name of the environment variable that can be set to override the default log level
 const LOG_LEVEL_ENV_VAR: &str = "WORMHOLE_LOG_LEVEL";
+/// The prefix appended to the generated log files
 const LOG_FILE_PREFIX: &str = "log";
+/// Project relative directory where log files are created
 const LOG_FILE_DIRECTORY: &str = "./log";
 
+#[doc(hidden)]
 fn get_stdout_layer<S>() -> impl Layer<S>
 where
     S: tracing::Subscriber + for<'a> LookupSpan<'a>,
 {
-    fmt::layer()
-        .event_format(tracing_subscriber::fmt::format().pretty())
+    fmt::layer().event_format(tracing_subscriber::fmt::format().pretty())
 }
 
+#[doc(hidden)]
 fn get_file_layer<S>() -> (impl Layer<S>, WorkerGuard)
 where
     S: tracing::Subscriber + for<'a> LookupSpan<'a>,
@@ -34,6 +38,7 @@ where
     (layer, worker_guard)
 }
 
+#[doc(hidden)]
 fn get_env_filter_layer<S>() -> impl Layer<S>
 where
     S: tracing::Subscriber + for<'a> LookupSpan<'a>,
@@ -50,6 +55,9 @@ where
         .from_env_lossy()
 }
 
+/// Configures a tracing subscriber and registers it in the global project scope
+/// This returns a guard value that flushes the filewriter buffer when dropped, which should be
+/// retained for the duration of the program.
 pub fn configure_tracing() -> anyhow::Result<WorkerGuard> {
     let (file_layer, worker_guard) = get_file_layer();
     let subscriber = Registry::default()
