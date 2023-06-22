@@ -1,3 +1,5 @@
+//! Functionality related to rooms. Conceptually a room represents a collection of player sessions.
+//! A room will potentially persist for many games.
 use std::collections::HashSet;
 
 use tokio::sync::mpsc::Sender;
@@ -7,6 +9,7 @@ use tracing::{info, instrument, warn};
 
 use crate::game::{Player, RoomId};
 
+/// The default timeout in seconds before an idle room will request cleanup
 const DEFAULT_DELETION_TIMEOUT_SECONDS: u64 = 30;
 
 /// A room is an entity that maintains a collection of [players][Player]
@@ -26,6 +29,24 @@ impl PartialEq for Room {
 }
 
 impl Room {
+    /// Creates a new room instance
+    ///
+    /// Builds a new room instance for a given identifier and deletion channel. It then schedules
+    /// a task that will sleep for a [given duration][DEFAULT_DELETION_TIMEOUT_SECONDS] and will
+    /// then send it's identifier over the deletion channel to request that an [upstream entity][crate::RoomDeletionHandler] will
+    /// make sure that it is cleaned up.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The unique identifier for the room
+    /// * `deletion_channel` - The channel that will be used to request room deletion
+    ///
+    /// # Examples
+    /// ```
+    /// let (sender, receiver) = tokio::mpsc::channel(1);
+    /// let room_id = RoomId(0);
+    /// let room: Room = Room::new(room_id, sender);
+    /// ```
     pub fn new(id: RoomId, deletion_channel: Sender<RoomId>) -> Self {
         let mut this = Self {
             id,
@@ -40,6 +61,11 @@ impl Room {
     }
 
     #[instrument(skip_all)]
+    /// Schedules room deletion
+    ///
+    /// When this is called a task is scheduled at a point in the future that will request room
+    /// cleanup. It will retain a copy of the handle for the scheduled task which can later be used
+    /// to abort the cleanup in the event that the room is no longer idle.
     fn schedule_deletion(&mut self) {
         info!(event = "scheduling_deletion", room_id = %self.id);
         let deletion_channel = self.deletion_channel.clone();
@@ -56,6 +82,11 @@ impl Room {
     }
 
     #[instrument(skip_all)]
+    /// Cancels a deletion for a room if one is scheduled
+    ///
+    /// Aborts the task associated with this rooms deletion handle so that it's deletion will not
+    /// be requested in the future. If the handle is currently [None] then the cancelation function
+    /// will have no affect
     fn cancel_deletion(&mut self) {
         match &self.deletion_handle {
             None => {

@@ -1,5 +1,8 @@
+//! Houses functionality related to player sessions
+
 use std::hash::Hash;
 #[derive(Debug, Hash, PartialOrd, Eq, PartialEq, Copy, Clone)]
+/// Id type that uniquely identifies a player
 pub(crate) struct PlayerId(u128);
 
 impl From<u128> for PlayerId {
@@ -9,6 +12,7 @@ impl From<u128> for PlayerId {
 }
 
 #[derive(Debug, Eq)]
+/// A player in a room
 pub(crate) struct Player {
     id: PlayerId,
 }

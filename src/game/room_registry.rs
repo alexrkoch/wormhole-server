@@ -1,3 +1,6 @@
+//! Utilities related to room registration
+//! Room registration is generally concerned with organizing live [rooms][crate::Room] and organizing their access
+//! and creation
 use std::collections::HashMap;
 
 use thiserror::Error;
@@ -7,9 +10,14 @@ use uuid::Uuid;
 
 use crate::game::Room;
 
+/// The maximum number of times that the registry will attempt to create a unique room ID before
+/// failing with a [RoomCreationError]
 const MAX_CREATE_ROOM_ID_ATTEMPTS: u8 = 5;
 
+/// Provides [room ids][RoomId] that can be used for new room creation
 pub(crate) trait ProvideRoomId {
+    /// Provides a new [RoomId] when called. Implementors will ideally provide uniformly
+    /// distributed identifiers to avoid collisions within the room registry
     fn provide_id() -> RoomId;
 }
 
@@ -23,6 +31,7 @@ impl ProvideRoomId for Uuid {
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Copy, Clone)]
 pub(crate) struct RoomId(u128);
 
+/// Defaults to displaying a RoomId in the [UUID hexadecimal format](https://en.wikipedia.org/wiki/Universally_unique_identifier#Hexadecimal_(base_16))
 impl std::fmt::Display for RoomId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Uuid::from_u128(self.0).fmt(f)
@@ -36,6 +45,8 @@ impl From<u128> for RoomId {
 }
 
 /// RoomRegistry maintains a list of [rooms][Room]
+///
+/// It provides an API for creating, managing, and deleting rooms within a defined location
 #[derive(Debug)]
 pub(crate) struct RoomRegistry<T: ProvideRoomId = Uuid> {
     rooms: HashMap<RoomId, Room>,
@@ -46,10 +57,16 @@ pub(crate) struct RoomRegistry<T: ProvideRoomId = Uuid> {
 #[derive(Error, Debug, PartialEq)]
 pub(crate) enum RoomCreationError {
     #[error("Unable to create a unique room identifier after {0} attempts")]
+    /// Signifies that a unique identifier couldn't be found after a given number of attempts.
+    /// If this occurs it is probably a sign that we have become popular beyond our wildest dreams
+    /// and we should ask one of the many developers we have hired to go figure it out.
+    /// Alternatively we may need to look at the given [provider][ProvideRoomId]
     UnableToCreateIdentifier(u8),
 }
 
 impl RoomRegistry<Uuid> {
+    /// Creates a new instance with an empty hashmap of rooms and `Uuid` as the type providing room
+    /// IDs
     pub fn new() -> Self {
         Self {
             rooms: Default::default(),
@@ -60,12 +77,26 @@ impl RoomRegistry<Uuid> {
 
 impl<T: ProvideRoomId> RoomRegistry<T> {
     #[instrument(skip_all)]
+    /// Gets a reference to a room with the given ID if it exists
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - A value that can be transformed into a RoomId
     pub fn get_room_for_id(&self, id: impl Into<RoomId>) -> Option<&Room> {
         info!(event = "room_registry.get_room_for_id");
         return self.rooms.get(&id.into());
     }
 
     #[instrument(skip_all)]
+    /// Creates a new room and supplies it with a channel to request deletion
+    ///
+    /// Will fail with a [RoomCreationError] if it is unable to create a [RoomId] that does not
+    /// already exist within the registry after [a set number][MAX_CREATE_ROOM_ID_ATTEMPTS] of
+    /// attempts
+    ///
+    /// # Arguments
+    /// * `deletion_sender` - A channel that the room can eventually use to request it's deletion
+    /// from an upstream service
     pub fn create_room(
         &mut self,
         deletion_sender: Sender<RoomId>,
@@ -93,11 +124,18 @@ impl<T: ProvideRoomId> RoomRegistry<T> {
         Ok(id)
     }
 
+    /// Lists the ids of rooms that currently exist in the registry
+    ///
+    /// Currently no production use cases for this but it is helpful as a debugging utility
     pub fn list_active_rooms(&self) -> Vec<String> {
         self.rooms.keys().map(|rm| format!("{}", rm)).collect()
     }
 
     #[instrument(skip_all)]
+    /// Deletes the room with the provided ID from the registry if it exists
+    ///
+    /// # Arguments
+    /// * `id` - The identifier of the room to be deleted
     pub fn delete_room(&mut self, id: &RoomId) {
         info!(event = "deleting_room", room_id = %id);
         self.rooms.remove(id);
